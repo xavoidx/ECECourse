@@ -1537,4 +1537,58 @@ Full `process_block` with three stages: ADC→float conversion (bias-subtract + 
 **Non-technical:** Discussed sustainable daily structure for a 6–6:30 wake transition (gradual shift, morning light, protect total sleep, guard a mid-morning deep-work block for hardest learning, triage shallow tasks to low-energy windows, 60–90 min focused cycles) and diet/exercise basics (sleep is the hub; regular movement; stable blood sugar; hydration; morning-only caffeine). Framed with appropriate skepticism re: overclaiming. Not course content — captured only as context for summer execution.
  
 **Where to pick up next:** Technical track resumes with **CMSIS-DSP swap** (Session 25's committed next step — replace hand-written polyphase FIR with `arm_fir_interpolate_f32`, re-measure PA0). Then input-oversampling architecture (decimation FIR @ 192 kHz ADC), then granular engine scoping. Pedal debugging (periodic ~4s glitch) slots in when hardware is in front of him. Still banked: Track B Day 4 (noise figure — also feeds the possible third project), Track A Day 6 (IIR vs FIR close), Track D Day 3 (autocorrelation). FPGA project is a parallel summer track once HDL ramp begins.
+## Session 27 — 2026-06-04 — Track A Day 6: IIR Foundations (Z-Transform, Poles/Zeros, BLT)
+
+**Track:** A — IIR thread, Day 1
+
+**What happened:**
+Comprehensive ground-up IIR theory session. Student requested a deep treatment after ~3 months away from the textbook. No code written — pure derivation and worked examples throughout.
+
+**Concepts covered:**
+
+*Z-transform foundations:*
+- Z-transform defined as generalization of DTFT; DTFT is Z evaluated on the unit circle
+- Delay property derived from substitution (not just stated): $\mathcal{Z}\{x[n-k]\} = z^{-k}X(z)$
+- Two key pairs derived: $\delta[n] \leftrightarrow 1$, $a^n u[n] \leftrightarrow \frac{z}{z-a}$
+- Clarified polar form $z = re^{j\omega}$: a real number like $z = 0.9$ pins both $r$ and $\omega$ exactly ($r=0.9, \omega=0$); ambiguity only exists if magnitude alone is given
+
+*Transfer functions and poles:*
+- $H(z) = B(z)/A(z)$ derived from difference equation via Z-transform and linearity
+- Numerator zeros → nulls; denominator poles → boosts
+- Stability criterion derived from exponential pair: poles inside unit circle → decaying impulse response → stable
+- Geometric frequency response: $|H(e^{j\omega})|$ = product of zero distances / product of pole distances evaluated on unit circle
+
+*Worked examples (both completed correctly):*
+- Q1: First-order IIR $y[n] = x[n] + 0.9y[n-1]$. Pole at $z=0.9$ (real axis, inside unit circle, stable, lowpass by geometric argument)
+- Q2: $H(z) = (1-z^{-2})/(1-0.8z^{-2})$. Zeros at $z=\pm1$, poles at $z=\pm\sqrt{0.8}$. Stable. DC=0, Nyquist=0, bandpass confirmed. Evaluated $|H|$ at $\omega=\pi/2$ → $\approx 1.11$.
+
+*Biquad as second-order section:*
+- Why SOS cascades: numerical stability, conjugate pole pairs fit exactly in one biquad
+- Biquad transfer function and difference equation written out
+- Jury stability conditions for second-order section: $|a_2| < 1$ and $|a_1| < 1 + a_2$
+- Poles of biquad: $a_2 = r^2$, $a_1 = -2r\cos\omega_0$ — coefficient-to-pole-location mapping explicit
+
+*Q and pole radius (paper task part 1):*
+- $\alpha = \sin\omega_0 / 2Q$; as $Q \to \infty$, $\alpha \to 0$, $a_2 \to 1$, $r \to 1$ → pole approaches unit circle → sharp resonance
+- As $Q \to 0.5$, $\alpha \to \sin\omega_0$, $a_2 = (1-\sin\omega_0)/(1+\sin\omega_0) < 1$, $r < 1$ → pole pulled inward → damped
+- Student correctly identified the chain without plugging in numbers
+
+*BLT derivation (paper task part 2):*
+- BLT mapping $s = \frac{2}{T}\cdot\frac{1-z^{-1}}{1+z^{-1}}$ derived to show unit circle maps to $j\Omega$ axis
+- Frequency warping equation derived: $\Omega = \frac{2}{T}\tan(\omega/2)$
+- Prewarping explained: design analog prototype at $\Omega_c = \frac{2}{T}\tan(\omega_c/2)$ so digital cutoff lands exactly at $\omega_c$
+- Applied BLT to $H(s) = s/(s+\Omega_c)$: student derived $b_0, b_1, a_1$ correctly (with $\alpha = 2 + \Omega_cT$)
+- DC check: $H=0$ ✓; Nyquist check: evaluated to $H=1$ exactly — student confirmed, Claude showed the algebra collapsing to unity
+- Unity gain at Nyquist noted as a general BLT property, inherited from analog prototype's $H(j\infty)=1$
+
+*Conceptual discussion (end of session):*
+- Student asked whether lowpass response is really about relative amplitude rather than absolute — poles don't create visible peaks in a Butterworth lowpass, they just make low frequencies higher relative to high frequencies
+- Confirmed: poles = relative boost in their neighborhood; visible peak only appears when pole is very close to unit circle (high Q). Zeros are the precise nulling tool; poles shape the transition and passband. Frequency response is fundamentally about relative amplitude across frequency.
+
+**Key ADI interview takeaways flagged:**
+- "What does Q do to your filter poles?" → $\alpha = \sin\omega_0/2Q$, tracks directly to pole radius
+- "How would you design a notch at 1 kHz?" → place zero pair on unit circle at $\pm\omega_0$
+- "Where do the EQ Cookbook coefficients come from?" → BLT applied to second-order analog prototype with prewarping
+
+**Where to pick up next:** Track A Day 7 — Direct Form I vs Transposed Direct Form II. Why DF1 (current `ProcessScalar`) has numerical problems at low $f_c$ relative to $f_s$; TDF2 state variable derivation; rewrite `ProcessScalar` to TDF2; update state vectors from five (x0,x1,x2,y1,y2) to two (s1,s2). Then NEON TDF2 path.
  

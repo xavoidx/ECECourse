@@ -1591,4 +1591,51 @@ Comprehensive ground-up IIR theory session. Student requested a deep treatment a
 - "Where do the EQ Cookbook coefficients come from?" → BLT applied to second-order analog prototype with prewarping
 
 **Where to pick up next:** Track A Day 7 — Direct Form I vs Transposed Direct Form II. Why DF1 (current `ProcessScalar`) has numerical problems at low $f_c$ relative to $f_s$; TDF2 state variable derivation; rewrite `ProcessScalar` to TDF2; update state vectors from five (x0,x1,x2,y1,y2) to two (s1,s2). Then NEON TDF2 path.
+
+## DSP v1/v2 Pitch-Shift Architecture — Design Decision
+
+**v1 target (STM32 F446RE): time-domain SOLA, octave-up only.**
+Pitch-up = time-stretch to 2x then resample at 2x. SOLA is the
+stretch stage only; resample is separate. Fixed 2x ratio collapses
+the analysis-hop/synthesis-hop bookkeeping: Ss = 2*Sa, clean COLA
+at 50% overlap with Hann.
+
+SOLA core: grab analysis frames at hop Sa, cross-correlate each
+frame's overlap region against the existing output tail over a
+±tolerance search, snap to the best-match lag, then Hann-windowed
+overlap-add. The correlation search ("synchronized") is what kills
+the destructive-interference seam artifact that plain OLA suffers.
+
+**Rejected alternative — phase vocoder (frequency domain).** Higher
+quality, studio standard, but latency typically 20–186 ms — too
+much for live guitar. Also heaviest compute (FFT per hop) and a
+bigger lift on the F446RE. Deferred to v2/later. Documented as the
+rejected alt with reason: latency + compute.
+
+**Real-time fixed-block caveat (carry into implementation):** SOLA's
+variable-lag placement fights fixed callback boundaries (must emit
+exactly N samples/callback). Standard fix = SOLAFS (fixed synthesis
+hop, only analysis search varies) + small internal FIFO to absorb
+slack. Handle when we get to code.
+
+**Resample weak point:** linear interpolation at the 2x resample is
+the documented quality leak (confirmed in MCU phase-vocoder
+literature). Acceptable for v1; upgrade to higher-order interp later.
+
+**Latency-hiding note (from Strymon NightSky teardown):** commercial
+pedals keep a fully analog dry path in parallel with the digital
+wet path → "true zero latency" on the dry signal while the wet
+signal carries the DSP delay. NightSky runs on a SHARC — an Analog
+Devices DSP (ADI portfolio tie-in). Consider a parallel analog dry
+path in the pedal design.
+
+**v2 target (Daisy Seed): granular pitch-shifting / cloud engine.**
+Generalization of v1: instead of two read pointers at fixed 2x,
+spawn N short grains (~10–100 ms), each with own position, rate
+(sets pitch), envelope, pan, spawn time. Many overlapping grains =
+lush, polyphonic-capable texture (Microcosm-style). New machinery
+vs v1 = the grain scheduler (active-grain pool, spawn timing, voice
+allocation); every per-grain op already built in v1. Daisy chosen
+for RAM (grain buffer), compute (OLA across many grains), and
+onboard audio codec vs bare STM32 ADC/DAC.
  
